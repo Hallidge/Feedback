@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Feedback Style Diagnostic</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f8fafc; }
+  .scale-btn { transition: all .15s ease; cursor: pointer; border: 2px solid #e5e7eb; }
+  .scale-btn:hover { transform: translateY(-2px); border-color: #6366f1; background: #eef2ff; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  .fade-in { animation: fadeIn .3s ease forwards; }
+  .bar-fill { transition: width 1.1s cubic-bezier(.4,0,.2,1); }
+</style>
+</head>
+<body>
+<div id="app" class="min-h-screen"></div>
+
+<script>
+// ===================================================
+//  SUPABASE
+// ===================================================
+const SUPABASE_URL = 'https://uhnuwktwwvskitgbzicz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVobnV3a3R3d3Zza2l0Z2J6aWN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMjg5ODQsImV4cCI6MjA4OTkwNDk4NH0.9EZiWo07SjaMQphgjfV1DjuKlwVqR1Wzqj9BZKdE73M';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ===================================================
+//  16-ITEM INSTRUMENT
+//  dim: 'care' = Care Personally | 'chal' = Challenge Directly
+//  rev: true = reverse-coded (score = 7 - rating)
+// ===================================================
+const STMTS = [
+  { id:'q1',  dim:'care', rev:false, text:"I take a genuine interest in what matters to the people I work with — their ambitions, not just their tasks." },
+  { id:'q2',  dim:'chal', rev:false, text:"When I see something that needs to change, I raise it promptly rather than letting it go." },
+  { id:'q3',  dim:'care', rev:false, text:"I find it easy to show colleagues that I'm invested in them as people, not just colleagues." },
+  { id:'q4',  dim:'chal', rev:false, text:"I give specific, honest feedback rather than vague or softened versions that leave people guessing." },
+  { id:'q5',  dim:'care', rev:true,  text:"I sometimes hold back from getting to know colleagues too personally — I prefer to keep things professional." },
+  { id:'q6',  dim:'chal', rev:true,  text:"I find it hard to deliver feedback that I know will be difficult for someone to hear." },
+  { id:'q7',  dim:'care', rev:false, text:"When a colleague is struggling, I make time to check in even when I'm busy." },
+  { id:'q8',  dim:'chal', rev:false, text:"I'm willing to have an uncomfortable conversation rather than avoid a problem and hope it resolves itself." },
+  { id:'q9',  dim:'care', rev:false, text:"I remember what people tell me about their lives and follow up on things that matter to them." },
+  { id:'q10', dim:'chal', rev:true,  text:"I tend to soften feedback significantly to protect someone's feelings, even when it makes the message less useful." },
+  { id:'q11', dim:'care', rev:true,  text:"I sometimes feel that personal conversations at work cross a line — I'd rather focus on the work itself." },
+  { id:'q12', dim:'chal', rev:false, text:"I push back on ideas I disagree with, even with people more senior than me." },
+  { id:'q13', dim:'care', rev:false, text:"The people I work closely with know that I genuinely care about how they're doing." },
+  { id:'q14', dim:'chal', rev:false, text:"I tell people clearly when their work isn't meeting the standard — I don't leave them to figure it out." },
+  { id:'q15', dim:'care', rev:false, text:"I make a conscious effort to understand what each person needs to do their best work." },
+  { id:'q16', dim:'chal', rev:true,  text:"I often leave a conversation wishing I'd said something more directly, but didn't want to rock the boat." },
+];
+
+const SCALE_SHORT = ['', 'Not at all', 'Rarely', 'Sometimes', 'Often', 'Mostly', 'Very much'];
+
+// ===================================================
+//  QUADRANT PROFILES
+// ===================================================
+const QUADRANTS = {
+  CandidAndCaring: {
+    label:   'Candid & Caring',
+    col:     '#7c3aed',
+    bg:      '#f5f3ff',
+    border:  '#ddd6fe',
+    em:      '💬',
+    care:    'high',
+    chal:    'high',
+    tagline: 'You invest in people and tell them the truth — that combination is rarer than it sounds',
+    desc: [
+      "You've found a balance that most people spend their careers chasing: you care enough about the people around you to be honest with them, and honest enough to make that care feel real rather than performative.",
+      "This shows up as feedback that lands because people trust it comes from genuine investment. You don't soften things to the point of uselessness, and you don't deliver hard truths with an edge. The result is that people tend to grow around you — not because you push them, but because they feel safe enough to hear you."
+    ],
+    strengths: [
+      "Builds trust quickly — people sense the combination of honesty and care",
+      "Feedback is specific, timely, and actionable rather than vague or delayed",
+      "Creates conditions where others feel safe to give honest feedback in return",
+      "Navigates difficult conversations without either avoiding them or damaging relationships"
+    ],
+    growth: "The risk for this style is over-functioning — taking on the emotional labour of other people's growth to a degree that isn't sustainable. Not everyone wants this quality of feedback, and not every relationship calls for it. Knowing when to hold back is as important as knowing how to engage.",
+    pressure: {
+      headline: "Under pressure, the balance can tip — usually towards challenge at the expense of care, or vice versa depending on the situation.",
+      signs: [
+        "Delivering honest feedback with less warmth than usual when stretched or frustrated",
+        "Absorbing others' discomfort during difficult conversations and softening the message as a result",
+        "Taking it personally when honest feedback isn't received well"
+      ],
+      watchFor: "Watch for the moments when candour tips into bluntness, or care tips into protection. Both happen under stress. The question isn't whether you got the balance right — it's whether you noticed when you didn't."
+    },
+    watchOut: "Others may hold you to a high standard and notice when you're less consistent than usual. Your default sets an expectation.",
+    teamNote: "A team with several Candid & Caring members tends to have high-quality conversations — but watch for groupthink, where the shared norm of 'good feedback' makes it harder to say something genuinely disruptive or unpopular.",
+    implications: [
+      "Model the behaviour explicitly — name what you're doing and why, so it becomes a learnable practice for the team",
+      "Create regular, low-stakes feedback rituals so candour becomes normalised rather than reserved for crises",
+      "Watch for team members who receive well but rarely give — build in reciprocal feedback structures"
+    ],
+    facilitation: [
+      "What's a piece of feedback you've been sitting on? What's stopping you from giving it?",
+      "When did you last receive feedback that genuinely changed how you work? What made it land?",
+      "Where in this team does the balance tip — towards too much care or too much candour?"
+    ]
+  },
+
+  CaringButCautious: {
+    label:   'Caring but Cautious',
+    col:     '#0891b2',
+    bg:      '#ecfeff',
+    border:  '#a5f3fc',
+    em:      '🫶',
+    care:    'high',
+    chal:    'low',
+    tagline: 'High investment in people — and a tendency to protect them from the truth',
+    desc: [
+      "You genuinely care about the people around you. That's not in question. What tends to happen is that the care gets in the way of the honesty — feedback gets softened, difficult conversations get delayed, and the concern for how someone might feel overrides what they actually need to hear.",
+      "The intent is kindness. But the effect is often the opposite of what you'd hope: people don't improve because they don't know what needs to change, or they sense the distance between what you're saying and what you actually think, which erodes trust over time."
+    ],
+    strengths: [
+      "Creates warm, supportive working relationships",
+      "People feel cared for and psychologically safe around you",
+      "Strong ability to hold space for people during difficulty",
+      "Attuned to the emotional climate of the team"
+    ],
+    growth: "The growth edge is recognising that protecting someone from a difficult truth is often protecting yourself from discomfort. Honest feedback, delivered with care, is one of the most respectful things you can give someone. It says: I think you're capable of hearing this and doing something with it.",
+    pressure: {
+      headline: "Under pressure, care increases and challenge drops further — difficult conversations get deferred, and the gap between what's thought and what's said widens.",
+      signs: [
+        "Agreeing with things in the room that you disagree with privately",
+        "Giving feedback that's so softened it loses its usefulness",
+        "Carrying knowledge of a problem for longer than you should without raising it"
+      ],
+      watchFor: "Watch for the weight of unsaid things accumulating. Delayed honesty has a compounding cost — the longer it waits, the harder it becomes to say, and the more damage the silence does in the meantime."
+    },
+    watchOut: "People may enjoy working with you but not grow as much as they could. Over time, some will sense the gap and lose trust in your feedback.",
+    teamNote: "Teams with a high Caring but Cautious presence often feel warm and psychologically safe — but struggle with honest performance conversations and can develop a norm of indirect communication.",
+    implications: [
+      "Distinguish between being kind and being honest — they are not the same thing, and conflating them costs people growth",
+      "Practice the specific skill of pairing care with directness: 'I'm telling you this because I want you to succeed...'",
+      "Create structures where feedback is expected and normalised — reducing the emotional stakes each time"
+    ],
+    facilitation: [
+      "When did you last say something in a feedback conversation that you'd softened from what you actually thought? What held you back?",
+      "What's the cost to this team of things going unsaid?",
+      "What would it take for you to give the feedback you're currently holding?"
+    ]
+  },
+
+  DirectButDistant: {
+    label:   'Direct but Distant',
+    col:     '#dc2626',
+    bg:      '#fff1f2',
+    border:  '#fecdd3',
+    em:      '🎯',
+    care:    'low',
+    chal:    'high',
+    tagline: 'High honesty — but the delivery can land as aggression rather than candour',
+    desc: [
+      "You're direct, and that directness is a real asset. You tell people what needs to change, you don't dress things up, and you don't leave people guessing. In many contexts, that's exactly what's needed.",
+      "What tends to be missing is the relational investment that makes honesty land as care rather than criticism. When people don't feel known or valued by you, your directness reads as aggression rather than candour. The feedback may be accurate, but the container it arrives in makes it harder to receive and act on."
+    ],
+    strengths: [
+      "Doesn't shy away from difficult conversations",
+      "Feedback is direct, specific, and clear — no mixed messages",
+      "High standards, communicated openly",
+      "Comfortable with challenge and debate"
+    ],
+    growth: "The growth edge is investing enough in the relationship that your honesty has somewhere to land. People are more likely to act on feedback from someone who they feel is genuinely in their corner. The challenge doesn't need to decrease — the care needs to increase.",
+    pressure: {
+      headline: "Under pressure, directness intensifies and the relational dimension drops further — feedback can tip into bluntness or dismissiveness.",
+      signs: [
+        "Delivering feedback with minimal context or framing, expecting people to just handle it",
+        "Underestimating the emotional impact of how something was said",
+        "Moving quickly to what needs to change without acknowledging what's working"
+      ],
+      watchFor: "Watch for feedback sessions that leave people feeling worse about themselves rather than clearer about what to do. The goal of honest feedback is growth, not correction. If people are flinching rather than thinking, the message isn't landing."
+    },
+    watchOut: "High performers may disengage or leave if they feel unseen as people. Your directness may suppress the team's willingness to challenge you back.",
+    teamNote: "Teams led or heavily influenced by a Direct but Distant style can produce strong results short-term but struggle with retention and psychological safety. People learn to perform but not to grow.",
+    implications: [
+      "Invest deliberately in the relationship before the feedback — 'How are you doing?' before 'Here's what needs to change'",
+      "Ask before telling: 'What do you think went well? What would you do differently?' — the self-assessment before your assessment",
+      "Notice your ratio of recognition to challenge. Most people need significantly more of the former than they receive"
+    ],
+    facilitation: [
+      "What's the impact of your feedback style on the people around you — as they'd describe it, not as you'd intend it?",
+      "When did you last give someone recognition that wasn't immediately followed by a 'but'?",
+      "What gets in the way of showing that you're personally invested in the people you work with?"
+    ]
+  },
+
+  DetachedAndDiplomatic: {
+    label:   'Detached & Diplomatic',
+    col:     '#78716c',
+    bg:      '#fafaf9',
+    border:  '#e7e5e4',
+    em:      '🌫️',
+    care:    'low',
+    chal:    'low',
+    tagline: 'Neither close enough to care deeply nor direct enough to challenge — feedback rarely lands',
+    desc: [
+      "This pattern tends to develop as a coping strategy — often in environments where honesty hasn't been safe, or where past attempts to care or challenge went badly. It's a self-protective stance, not a character flaw.",
+      "The impact, however, is significant. People around you don't get the feedback they need to grow, and they often don't feel genuinely invested in. Teams can drift without the honest conversation that would correct them. The silence that feels safe can quietly become its own kind of damage."
+    ],
+    strengths: [
+      "Rarely creates interpersonal friction or conflict",
+      "Creates space for others without imposing",
+      "Often highly observant — notices a great deal without acting on it",
+      "Can be a neutral presence in polarised teams"
+    ],
+    growth: "The growth edge starts with understanding what's making full engagement feel unsafe. Is it the environment? Past experience? A particular relationship? The shift towards caring more and challenging more doesn't have to be dramatic — small, deliberate acts of honesty and investment tend to shift the pattern over time.",
+    pressure: {
+      headline: "Under pressure, withdrawal increases — both from relationships and from difficult conversations.",
+      signs: [
+        "Becoming less visible and less vocal when the team needs more engagement, not less",
+        "Agreeing with decisions you have reservations about to avoid conflict",
+        "Withholding positive regard as well as honest challenge — staying in a kind of neutral detachment"
+      ],
+      watchFor: "Watch for the cost of staying on the sidelines — not just to the team, but to you. Disengagement protects against risk but also against meaning. The question worth sitting with is: what would it take to show up more fully here?"
+    },
+    watchOut: "Team members may feel unseen and underdeveloped. The absence of feedback — both positive and challenging — can register as indifference.",
+    teamNote: "A team with several Detached & Diplomatic members can feel pleasant but directionless. Things that need saying stay unsaid. Performance conversations don't happen. The culture slowly normalises low engagement.",
+    implications: [
+      "Start with care before challenge — it's often the safer entry point and builds the relationship that makes honesty possible",
+      "Create low-stakes opportunities to practice directness: one honest observation per team meeting, one piece of specific positive feedback per week",
+      "Explore what's making full engagement feel costly — is it the team, the leader, the culture, or something personal?"
+    ],
+    facilitation: [
+      "What would you need to feel safer being more honest in this team?",
+      "What's something you've been thinking about this team or your work together that you haven't said out loud?",
+      "What does care actually look like in practice here — and is it present?"
+    ]
+  }
+};
+
+// ===================================================
+//  STATE
+// ===================================================
+let VIEW             = 'home';
+let RATINGS          = {};
+let CURRENT_STMT     = 0;
+let PARTICIPANT_NAME = '';
+let ACTIVE_ENG       = null;
+let COMPUTED_PROFILE = null;
+let ADMIN_ENGS       = [];
+let ADMIN_SELECTED   = null;
+let ADMIN_RESPONSES  = [];
+
+// ===================================================
+//  SCORING
+// ===================================================
+function computeScores(ratings) {
+  function dimScore(dim) {
+    const stmts = STMTS.filter(s => s.dim === dim);
+    const vals  = stmts.map(s => {
+      const r = ratings[s.id];
+      if (!r) return null;
+      return s.rev ? (7 - r) : r;
+    }).filter(v => v !== null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+  return { care: dimScore('care'), challenge: dimScore('chal') };
+}
+
+function classify(care, challenge) {
+  const MID    = 3.5;
+  const hiCare = care      > MID;
+  const hiChal = challenge > MID;
+  if ( hiCare &&  hiChal) return 'CandidAndCaring';
+  if ( hiCare && !hiChal) return 'CaringButCautious';
+  if (!hiCare &&  hiChal) return 'DirectButDistant';
+  return 'DetachedAndDiplomatic';
+}
+
+// ===================================================
+//  RENDER
+// ===================================================
+function render(html) { document.getElementById('app').innerHTML = html; }
+
+// ===================================================
+//  HOME VIEW
+// ===================================================
+function homeView() {
+  VIEW = 'home';
+  render(`
+    <div class="min-h-screen flex items-center justify-center p-4" style="background:linear-gradient(160deg,#f5f3ff 0%,#f8fafc 70%)">
+      <div class="rounded-2xl shadow-md p-8 max-w-md w-full fade-in" style="background:#fdfcff;border:1px solid #ede9fe">
+        <div class="text-center mb-8">
+          <div class="text-5xl mb-4">💬</div>
+          <h1 class="text-2xl font-bold mb-3" style="color:#1e1b4b">Feedback Style Diagnostic</h1>
+          <p class="text-sm leading-relaxed mb-3" style="color:#4c1d95">
+            How we give — and withhold — feedback shapes everything about how a team learns, performs, and trusts each other. Most of us have a default style we're not fully aware of.
+          </p>
+          <p class="text-sm leading-relaxed mb-3" style="color:#6d28d9">
+            This diagnostic maps your current tendency across two dimensions: how much you care about the people you work with, and how directly you challenge them. Based on the Radical Candor framework by Kim Scott.
+          </p>
+          <p class="text-xs" style="color:#a78bfa">16 questions · around 5 minutes · your results are private</p>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1.5" style="color:#4c1d95">Your name <span class="font-normal" style="color:#a78bfa">(optional)</span></label>
+            <input id="inp-name" type="text" placeholder="e.g. Alex" autocomplete="off"
+              style="border-color:#ede9fe;background:#fdfcff"
+              class="w-full rounded-xl px-4 py-3 text-sm border focus:outline-none focus:ring-2 focus:ring-violet-300 transition"/>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1.5" style="color:#4c1d95">Team code <span style="color:#e87b5a">*</span></label>
+            <input id="inp-code" type="text" placeholder="Enter the code from your coach" autocomplete="off"
+              style="border-color:#ede9fe;background:#fdfcff"
+              class="w-full rounded-xl px-4 py-3 text-sm border uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-violet-300 transition"/>
+          </div>
+          <button onclick="startSurvey()"
+            style="background:#7c3aed"
+            class="w-full hover:opacity-90 text-white font-semibold rounded-xl py-3 transition-opacity shadow-sm">
+            Begin →
+          </button>
+          <div class="text-center pt-2">
+            <button onclick="showAdmin()" class="text-xs transition-colors" style="color:#c4b5fd">
+              Coach / Admin access
+            </button>
+          </div>
+
+          <!-- Privacy notice -->
+          <div class="mt-4 rounded-xl p-4 text-left" style="background:#f5f3ff;border:1px solid #ede9fe">
+            <p class="text-xs font-semibold mb-2" style="color:#6d28d9">Privacy — what happens to your data</p>
+            <ul class="space-y-1.5" style="color:#9ca3af;font-size:10px;line-height:1.5">
+              <li>· Your name is optional and used only to label your result on the team map.</li>
+              <li>· Your responses and style result are stored in a cloud database (Supabase, hosted on AWS).</li>
+              <li>· Your facilitator can see your quadrant result and position on the team map. Individual question responses are not visible to them.</li>
+              <li>· Your data is not shared with or sold to any third party.</li>
+              <li>· This tool is hosted on standard cloud infrastructure. If your organisation has specific data compliance requirements, please speak to your facilitator before proceeding.</li>
+              <li>· To request deletion of your data, contact your facilitator.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+async function startSurvey() {
+  const nameEl = document.getElementById('inp-name');
+  const codeEl = document.getElementById('inp-code');
+  const code   = (codeEl.value || '').trim().toUpperCase();
+  if (!code) { codeEl.focus(); return; }
+
+  render(`<div class="min-h-screen flex items-center justify-center"><p class="text-gray-400 text-sm">Checking team code…</p></div>`);
+
+  const { data, error } = await sb.from('rc_engagements').select('*').eq('code', code).maybeSingle();
+  if (error || !data) {
+    homeView();
+    setTimeout(() => {
+      document.getElementById('inp-code').value = code;
+      alert('Team code not recognised. Please check with your coach.');
+    }, 100);
+    return;
+  }
+
+  PARTICIPANT_NAME = (nameEl ? nameEl.value.trim() : '') || 'Anonymous';
+  ACTIVE_ENG       = data;
+  RATINGS          = {};
+  CURRENT_STMT     = 0;
+  VIEW = 'survey';
+  surveyView();
+}
+
+// ===================================================
+//  SURVEY VIEW
+// ===================================================
+function surveyView() {
+  const stmt   = STMTS[CURRENT_STMT];
+  const total  = STMTS.length;
+  const pct    = Math.round((CURRENT_STMT / total) * 100);
+  const sel    = RATINGS[stmt.id];
+  const isLast = CURRENT_STMT === total - 1;
+
+  render(`
+    <div class="min-h-screen flex items-center justify-center p-4" style="background:linear-gradient(160deg,#f5f3ff 0%,#f8fafc 70%)">
+      <div class="rounded-2xl shadow-md p-8 max-w-lg w-full fade-in" style="background:#fdfcff;border:1px solid #ede9fe">
+
+        <div class="mb-6">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-medium" style="color:#7c3aed">${CURRENT_STMT + 1} <span style="color:#c4b5fd;font-weight:400">of ${total}</span></span>
+            <span class="text-xs" style="color:#c4b5fd">${pct}%</span>
+          </div>
+          <div class="w-full rounded-full h-1" style="background:#ede9fe">
+            <div class="h-1 rounded-full transition-all duration-500" style="width:${pct}%;background:#7c3aed"></div>
+          </div>
+        </div>
+
+        <p class="text-xs italic mb-6" style="color:#a78bfa">Think about how you actually behave — not how you'd like to, or think you should.</p>
+
+        <div class="min-h-[84px] flex items-start mb-8">
+          <p class="text-lg leading-relaxed font-medium" style="color:#1e1b4b">${stmt.text}</p>
+        </div>
+
+        <div class="grid grid-cols-6 gap-2 mb-7">
+          ${[1,2,3,4,5,6].map(v => `
+            <button onclick="rate(${v})"
+              style="${sel === v
+                ? 'border-color:#7c3aed;background:#7c3aed;box-shadow:0 2px 8px #7c3aed40'
+                : 'border-color:#ede9fe;background:#fdfcff'}"
+              class="scale-btn rounded-xl py-3 flex flex-col items-center gap-1.5 w-full">
+              <span class="text-xl font-bold" style="color:${sel === v ? '#fff' : '#a78bfa'}">${v}</span>
+              <span style="color:${sel === v ? '#ddd6fe' : '#a78bfa'};font-size:9px;white-space:nowrap;line-height:1">${SCALE_SHORT[v]}</span>
+            </button>
+          `).join('')}
+        </div>
+
+        <div class="flex justify-between items-center">
+          <button onclick="prevStmt()" class="text-sm transition-colors ${CURRENT_STMT === 0 ? 'invisible' : ''}" style="color:#a78bfa">← Back</button>
+          <button onclick="nextStmt()" ${!sel ? 'disabled' : ''}
+            class="disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-semibold px-7 py-2.5 rounded-xl transition-colors shadow-sm"
+            style="background:#7c3aed">
+            ${isLast ? 'See my results →' : 'Next →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function rate(v) {
+  RATINGS[STMTS[CURRENT_STMT].id] = v;
+  if (CURRENT_STMT < STMTS.length - 1) { CURRENT_STMT++; surveyView(); }
+  else { surveyView(); }
+}
+
+function prevStmt() {
+  if (CURRENT_STMT > 0) { CURRENT_STMT--; surveyView(); }
+}
+
+function nextStmt() {
+  if (!RATINGS[STMTS[CURRENT_STMT].id]) return;
+  if (CURRENT_STMT < STMTS.length - 1) { CURRENT_STMT++; surveyView(); }
+  else { computeAndShowProfile(); }
+}
+
+// ===================================================
+//  PROFILE VIEW
+// ===================================================
+function computeAndShowProfile() {
+  const { care, challenge } = computeScores(RATINGS);
+  const style = classify(care, challenge);
+  COMPUTED_PROFILE = { care, challenge, style };
+  profileView(care, challenge, style, false);
+}
+
+function profileView(care, challenge, style, saved) {
+  const p    = QUADRANTS[style];
+  const cPct = Math.round(((care      - 1) / 5) * 100);
+  const hPct = Math.round(((challenge - 1) / 5) * 100);
+
+  render(`
+    <div class="min-h-screen py-10 px-4 fade-in" style="background:#f5f3ff22">
+      <div class="max-w-xl mx-auto space-y-4 pb-12">
+
+        <!-- Style card -->
+        <div class="rounded-2xl p-8 text-center shadow-sm" style="background:${p.bg};border:2px solid ${p.border}">
+          <div class="text-5xl mb-3">${p.em}</div>
+          <div class="text-xs font-semibold uppercase tracking-widest mb-2" style="color:${p.col}">Your current feedback tendency</div>
+          <h2 class="text-3xl font-bold mb-3" style="color:${p.col}">${p.label}</h2>
+          <p class="text-sm italic leading-relaxed max-w-xs mx-auto" style="color:#57534e">"${p.tagline}"</p>
+        </div>
+
+        <!-- Two dimensions -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-700 text-sm mb-5">Your two dimensions</h3>
+          <div class="mb-5">
+            <div class="flex justify-between text-xs text-gray-500 mb-1.5">
+              <span>← Low personal care</span><span>High personal care →</span>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div class="h-3 rounded-full bar-fill" style="width:${cPct}%;background:#0891b2"></div>
+            </div>
+            <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+              <span>1.0</span>
+              <span class="font-semibold text-cyan-600 text-xs">${care.toFixed(2)}</span>
+              <span>6.0</span>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs text-gray-500 mb-1.5">
+              <span>← Low direct challenge</span><span>High direct challenge →</span>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div class="h-3 rounded-full bar-fill" style="width:${hPct}%;background:#dc2626"></div>
+            </div>
+            <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+              <span>1.0</span>
+              <span class="font-semibold text-red-600 text-xs">${challenge.toFixed(2)}</span>
+              <span>6.0</span>
+            </div>
+          </div>
+          <p class="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-50 leading-relaxed">Based on the Radical Candor framework (Kim Scott). The midpoint (3.5) separates low and high tendencies. These are current patterns — not fixed traits.</p>
+        </div>
+
+        <!-- Description -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-700 text-sm mb-4">What this tends to look like</h3>
+          ${p.desc.map(d => `<p class="text-sm text-gray-600 leading-relaxed mb-3 last:mb-0">${d}</p>`).join('')}
+        </div>
+
+        <!-- Strengths -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-700 text-sm mb-4">What you bring</h3>
+          <ul class="space-y-2.5">
+            ${p.strengths.map(s => `
+              <li class="flex gap-2.5 text-sm text-gray-600">
+                <span class="shrink-0 font-bold mt-0.5" style="color:${p.col}">✓</span><span>${s}</span>
+              </li>`).join('')}
+          </ul>
+        </div>
+
+        <!-- Growth edge -->
+        <div class="rounded-2xl p-6 shadow-sm" style="background:${p.bg};border:1px solid ${p.border}">
+          <h3 class="font-semibold text-sm mb-3" style="color:${p.col}">Growth edge</h3>
+          <p class="text-sm text-gray-700 leading-relaxed">${p.growth}</p>
+        </div>
+
+        <!-- Under pressure -->
+        <div class="rounded-2xl p-6 shadow-sm" style="background:#1c191708;border:1px solid #e7e5e4">
+          <h3 class="font-semibold text-sm mb-2" style="color:#292524">⚡ Under pressure</h3>
+          <p class="text-sm font-medium mb-3" style="color:#57534e">${p.pressure.headline}</p>
+          <ul class="space-y-2 mb-4">
+            ${p.pressure.signs.map(s => `
+              <li class="flex gap-2.5 text-sm" style="color:#78716c">
+                <span class="shrink-0 mt-0.5" style="color:#7c3aed">▸</span><span>${s}</span>
+              </li>`).join('')}
+          </ul>
+          <p class="text-xs leading-relaxed italic pt-3 border-t border-gray-100" style="color:#a8a29e">${p.pressure.watchFor}</p>
+        </div>
+
+        <!-- Save / Download -->
+        ${!saved ? `
+          <div class="rounded-2xl p-6 shadow-sm text-center" style="background:#fdfcff;border:1px solid #ede9fe">
+            <p class="text-sm font-medium mb-1" style="color:#1e1b4b">Want to keep your results?</p>
+            <p class="text-xs mb-4" style="color:#6d28d9">Download your profile before submitting — you won't be able to return to this page.</p>
+            <button onclick="downloadProfile(${care.toFixed(4)}, ${challenge.toFixed(4)}, '${style}')"
+              class="w-full font-semibold px-8 py-3 rounded-xl transition-colors mb-5"
+              style="background:#ede9fe;border:1.5px solid #c4b5fd;color:#5b21b6">
+              📄 Download my profile (PDF)
+            </button>
+            <div class="flex items-center gap-3 mb-5">
+              <div class="flex-1 h-px" style="background:#ede9fe"></div>
+              <span class="text-xs" style="color:#a78bfa">then when you're ready</span>
+              <div class="flex-1 h-px" style="background:#ede9fe"></div>
+            </div>
+            <p class="text-xs mb-4" style="color:#a78bfa">Only your style label is counted in the team view — your scores stay private.</p>
+            <button onclick="saveResponse()" id="save-btn"
+              class="w-full text-white font-semibold px-8 py-3 rounded-xl shadow-sm"
+              style="background:#7c3aed">
+              Add my result to the team →
+            </button>
+          </div>
+        ` : `
+          <div class="rounded-2xl p-6 text-center shadow-sm" style="background:#f5f3ff;border:1px solid #ddd6fe">
+            <div class="text-3xl mb-2">✅</div>
+            <p class="text-sm font-semibold mb-1" style="color:#5b21b6">Your response has been saved.</p>
+            <p class="text-xs text-gray-500">Thank you${PARTICIPANT_NAME && PARTICIPANT_NAME !== 'Anonymous' ? ', ' + PARTICIPANT_NAME : ''}. Your results have been added to the team. You can close this tab.</p>
+          </div>
+        `}
+        <p class="text-center text-xs text-gray-300 pb-2">Based on the Radical Candor framework · Current tendencies, not fixed categories</p>
+      </div>
+    </div>
+  `);
+}
+
+async function saveResponse() {
+  const btn = document.getElementById('save-btn');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  const { care, challenge, style } = COMPUTED_PROFILE;
+  const { error } = await sb.from('rc_responses').insert({
+    eng_id:      ACTIVE_ENG.id,
+    participant: PARTICIPANT_NAME,
+    care:        Math.round(care      * 100) / 100,
+    challenge:   Math.round(challenge * 100) / 100,
+    style
+  });
+  if (error) {
+    alert('Could not save. Please try again.\n' + error.message);
+    if (btn) { btn.textContent = 'Add my result to the team →'; btn.disabled = false; }
+    return;
+  }
+  profileView(care, challenge, style, true);
+}
+
+// ===================================================
+//  DOWNLOAD PDF
+// ===================================================
+function downloadProfile(care, challenge, style) {
+  const p    = QUADRANTS[style];
+  const cPct = Math.round(((care - 1) / 5) * 100);
+  const hPct = Math.round(((challenge - 1) / 5) * 100);
+  const name = PARTICIPANT_NAME && PARTICIPANT_NAME !== 'Anonymous' ? PARTICIPANT_NAME : '';
+  const date = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  <title>Feedback Style Profile — ${name || 'My Profile'}</title>
+  <style>
+    @page { size: A4; margin: 20mm 18mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #1f2937; background: white; font-size: 12px; }
+    .header { background: ${p.bg}; border-left: 5px solid ${p.col}; padding: 24px 28px; margin-bottom: 20px; border-radius: 6px; }
+    .label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: ${p.col}; margin-bottom: 4px; }
+    .style-name { font-size: 30px; font-weight: 800; color: ${p.col}; }
+    .tagline { font-size: 12px; color: #6b7280; font-style: italic; margin-top: 6px; }
+    .date { font-size: 10px; color: #9ca3af; margin-top: 4px; }
+    .section { margin-bottom: 16px; }
+    .section-title { font-size: 11px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; border-bottom: 1px solid #f3f4f6; padding-bottom: 4px; }
+    .bar-row { margin-bottom: 8px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 10px; color: #6b7280; margin-bottom: 3px; }
+    .bar-track { height: 7px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 7px; border-radius: 4px; }
+    .bar-score { font-size: 10px; font-weight: 600; text-align: right; margin-top: 2px; }
+    p { line-height: 1.65; color: #4b5563; margin-bottom: 8px; }
+    ul { padding-left: 0; list-style: none; }
+    li { display: flex; gap: 8px; margin-bottom: 5px; color: #4b5563; }
+    li::before { content: '→'; color: ${p.col}; flex-shrink: 0; }
+    .growth-box { background: ${p.bg}; border-left: 3px solid ${p.col}; padding: 12px 14px; border-radius: 4px; }
+    .pressure-box { background: #fafaf9; border-left: 3px solid #d97706; padding: 12px 14px; border-radius: 4px; margin-top: 14px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .footer { font-size: 9px; color: #d1d5db; text-align: center; margin-top: 20px; padding-top: 10px; border-top: 1px solid #f3f4f6; }
+  </style></head><body>
+  <div class="header">
+    <div style="font-size:32px">${p.em}</div>
+    <div class="label" style="margin-top:8px">Feedback Style Diagnostic — Current Tendency</div>
+    <div class="style-name">${p.label}</div>
+    <div class="tagline">"${p.tagline}"</div>
+    <div class="date">${name ? name + ' · ' : ''}${date}</div>
+  </div>
+  <div class="section">
+    <div class="section-title">Your two dimensions</div>
+    <div class="bar-row">
+      <div class="bar-label"><span>← Low personal care</span><span>High personal care →</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${cPct}%;background:#0891b2"></div></div>
+      <div class="bar-score" style="color:#0891b2">${care.toFixed(2)} / 6.0 &nbsp;(care personally)</div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label"><span>← Low direct challenge</span><span>High direct challenge →</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${hPct}%;background:#dc2626"></div></div>
+      <div class="bar-score" style="color:#dc2626">${challenge.toFixed(2)} / 6.0 &nbsp;(challenge directly)</div>
+    </div>
+  </div>
+  <div class="section">${p.desc.map(d => `<p>${d}</p>`).join('')}</div>
+  <div class="two-col">
+    <div class="section"><div class="section-title">What you bring</div><ul>${p.strengths.map(s => `<li>${s}</li>`).join('')}</ul></div>
+    <div class="section"><div class="section-title">Growth edge</div><p style="margin-bottom:0">${p.growth}</p></div>
+  </div>
+  <div class="pressure-box">
+    <div class="section-title" style="color:#92400e;border-color:#fde68a">⚡ Under pressure</div>
+    <p style="font-weight:600;color:#374151;margin-bottom:6px">${p.pressure.headline}</p>
+    <ul>${p.pressure.signs.map(s => `<li style="color:#6b7280">${s}</li>`).join('')}</ul>
+    <p style="font-size:10px;color:#9ca3af;font-style:italic;margin-top:8px">${p.pressure.watchFor}</p>
+  </div>
+  <div class="footer">Feedback Style Diagnostic · Based on Radical Candor (Kim Scott) · Current tendencies — not fixed categories · ${date}</div>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.onload = () => w.print();
+}
+
+// ===================================================
+//  ADMIN
+// ===================================================
+async function showAdmin() {
+  const pw = prompt('Admin access code:');
+  if (!pw || pw.trim().toUpperCase() !== 'COACH2024') { if (pw !== null) alert('Incorrect access code.'); return; }
+  VIEW = 'admin';
+  render(`<div class="min-h-screen flex items-center justify-center"><p class="text-gray-400 text-sm">Loading…</p></div>`);
+  const { data } = await sb.from('rc_engagements').select('*').order('created_at', { ascending: false });
+  ADMIN_ENGS = data || [];
+  adminHomeView();
+}
+
+function adminHomeView() {
+  render(`
+    <div class="min-h-screen p-6" style="background:#f5f3ff22">
+      <div class="max-w-2xl mx-auto">
+        <div class="flex items-start justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-bold" style="color:#1e1b4b">💬 Feedback Style — Admin</h1>
+            <p class="text-sm text-gray-400 mt-0.5">Manage team engagements</p>
+          </div>
+          <button onclick="homeView()" class="text-sm text-gray-400 hover:text-gray-600 mt-1">← Exit</button>
+        </div>
+
+        <div class="bg-white rounded-2xl p-6 shadow-sm mb-6">
+          <h2 class="font-semibold text-gray-700 text-sm mb-4">Create new engagement</h2>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Engagement name</label>
+              <input id="new-name" type="text" placeholder="e.g. Sales Team Q3"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Client / Organisation</label>
+              <input id="new-client" type="text" placeholder="e.g. Acme Ltd"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <div class="flex-1">
+              <label class="text-xs text-gray-500 mb-1 block">Team code</label>
+              <input id="new-code" type="text" placeholder="e.g. SALES24" style="text-transform:uppercase"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-violet-400"/>
+            </div>
+            <div class="flex items-end">
+              <button onclick="createEngagement()" style="background:#7c3aed"
+                class="text-white text-sm font-semibold px-5 py-2.5 rounded-lg">Create</button>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="font-semibold text-gray-500 text-xs uppercase tracking-wider mb-3">Engagements</h2>
+        <div class="space-y-3">
+          ${ADMIN_ENGS.length === 0
+            ? `<div class="bg-white rounded-xl p-8 text-center shadow-sm"><p class="text-sm text-gray-400">No engagements yet.</p></div>`
+            : ADMIN_ENGS.map(e => `
+              <div class="bg-white rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
+                <div>
+                  <div class="font-semibold text-gray-800 text-sm">${e.name}</div>
+                  <div class="text-xs text-gray-400 mt-0.5">${e.client ? e.client + ' · ' : ''}Code: <span class="font-mono font-bold text-violet-600">${e.code}</span></div>
+                </div>
+                <button onclick="viewEngagement('${e.id}')"
+                  class="shrink-0 text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+                  style="background:#f5f3ff;color:#7c3aed">View team →</button>
+              </div>
+            `).join('')}
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+async function createEngagement() {
+  const name   = (document.getElementById('new-name').value   || '').trim();
+  const client = (document.getElementById('new-client').value || '').trim();
+  const code   = (document.getElementById('new-code').value   || '').trim().toUpperCase();
+  if (!name || !code) { alert('Please enter a name and team code.'); return; }
+  const { data, error } = await sb.from('rc_engagements').insert({ name, client, code }).select().single();
+  if (error) { alert('Error: ' + error.message); return; }
+  ADMIN_ENGS.unshift(data);
+  adminHomeView();
+}
+
+async function viewEngagement(id) {
+  ADMIN_SELECTED = ADMIN_ENGS.find(e => e.id === id);
+  render(`<div class="min-h-screen flex items-center justify-center"><p class="text-gray-400 text-sm">Loading…</p></div>`);
+  const { data } = await sb.from('rc_responses').select('*').eq('eng_id', id).order('created_at', { ascending: true });
+  ADMIN_RESPONSES = data || [];
+  teamView();
+}
+
+// ===================================================
+//  TEAM VIEW
+// ===================================================
+function teamView() {
+  const resps = ADMIN_RESPONSES;
+  const eng   = ADMIN_SELECTED;
+  const n     = resps.length;
+
+  if (n === 0) {
+    render(`
+      <div class="min-h-screen p-6" style="background:#f5f3ff22">
+        <div class="max-w-2xl mx-auto">
+          <button onclick="adminHomeView()" class="text-sm text-gray-400 mb-6 block">← Back</button>
+          <h2 class="text-xl font-bold mb-2" style="color:#1e1b4b">${eng.name}</h2>
+          <div class="bg-white rounded-2xl p-10 text-center shadow-sm">
+            <p class="text-sm text-gray-400 mb-1">No responses yet.</p>
+            <p class="text-xs text-gray-300">Share code: <span class="font-mono font-bold text-violet-600">${eng.code}</span></p>
+          </div>
+        </div>
+      </div>`);
+    return;
+  }
+
+  // Counts
+  const counts = { CandidAndCaring: 0, CaringButCautious: 0, DirectButDistant: 0, DetachedAndDiplomatic: 0 };
+  resps.forEach(r => { if (counts[r.style] !== undefined) counts[r.style]++; });
+
+  const careMean = resps.reduce((a, r) => a + r.care,      0) / n;
+  const chalMean = resps.reduce((a, r) => a + r.challenge, 0) / n;
+
+  const scatterSVG = buildScatterSVG(resps, careMean, chalMean);
+  const dynamics   = generateDynamics(counts, n, careMean, chalMean);
+  const watchOuts  = generateWatchOuts(counts, n);
+  const agreements = generateTeamAgreements(counts, n);
+
+  render(`
+    <div class="min-h-screen p-6 pb-16 fade-in" style="background:#f5f3ff22">
+      <div class="max-w-2xl mx-auto space-y-5">
+
+        <div class="flex items-start justify-between">
+          <div>
+            <button onclick="adminHomeView()" class="text-xs text-gray-400 mb-1 block">← All engagements</button>
+            <h2 class="text-xl font-bold" style="color:#1e1b4b">${eng.name}</h2>
+            <p class="text-sm text-gray-400">${eng.client ? eng.client + ' · ' : ''}${n} response${n !== 1 ? 's' : ''} · <span class="font-mono font-bold text-violet-600">${eng.code}</span></p>
+          </div>
+          <button onclick="viewEngagement('${eng.id}')" class="text-xs text-gray-400 mt-1">🔄 Refresh</button>
+        </div>
+
+        <!-- Composition -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-700 text-sm mb-5">Team composition <span class="text-gray-400 font-normal">(n=${n})</span></h3>
+          ${Object.entries(counts).map(([style, count]) => {
+            const pct = Math.round((count / n) * 100);
+            const q   = QUADRANTS[style];
+            return `
+              <div class="mb-4 last:mb-0">
+                <div class="flex justify-between items-center mb-1.5">
+                  <span class="text-sm font-medium flex items-center gap-2">
+                    <span>${q.em}</span><span style="color:${q.col}">${q.label}</span>
+                  </span>
+                  <span class="text-sm text-gray-500">${count} · ${pct}%</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                  <div class="h-2.5 rounded-full" style="width:${pct}%;background:${q.col}"></div>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+
+        <!-- Scatter map -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-700 text-sm mb-1">Team scatter map</h3>
+          <p class="text-xs text-gray-400 mb-3">Each dot is one team member. X = care personally, Y = challenge directly.</p>
+          ${scatterSVG}
+        </div>
+
+        <!-- Dynamics -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-700 text-sm mb-4">Team dynamics</h3>
+          ${dynamics.map(d => `<p class="text-sm text-gray-600 leading-relaxed mb-3 last:mb-0">${d}</p>`).join('')}
+        </div>
+
+        <!-- Watch-outs -->
+        <div class="rounded-2xl p-6 shadow-sm" style="background:#1c191708;border:1px solid #e7e5e4">
+          <h3 class="font-semibold text-sm mb-1" style="color:#292524">⚠️ Watch-out signals</h3>
+          <p class="text-xs mb-4" style="color:#a8a29e">Early warning signs for this team's feedback profile.</p>
+          <ul class="space-y-3">
+            ${watchOuts.map(w => `
+              <li class="flex gap-2.5 text-sm" style="color:#57534e">
+                <span class="shrink-0 mt-0.5" style="color:#dc2626">▸</span>
+                <span class="leading-relaxed">${w}</span>
+              </li>`).join('')}
+          </ul>
+        </div>
+
+        <!-- Team agreements -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-700 text-sm mb-1">Suggested feedback agreements</h3>
+          <p class="text-xs text-gray-400 mb-4">Starting points — adapt to the language that fits this team.</p>
+          <ul class="space-y-3">
+            ${agreements.map((a, i) => `
+              <li class="flex gap-3 text-sm text-gray-600">
+                <span class="shrink-0 font-semibold mt-0.5" style="color:#7c3aed">${i + 1}.</span>
+                <span class="leading-relaxed">${a}</span>
+              </li>`).join('')}
+          </ul>
+        </div>
+
+        <!-- Facilitation questions -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="font-semibold text-gray-700 text-sm mb-1">Facilitation questions</h3>
+          <p class="text-xs text-gray-400 mb-5">For use in a team session. Not for individual attribution.</p>
+          <ol class="space-y-4">
+            ${generateFacilitationQs(counts).map((q, i) => `
+              <li class="flex gap-3 text-sm text-gray-600">
+                <span class="shrink-0 font-semibold text-gray-300 w-5 text-right">${i + 1}.</span>
+                <span class="leading-relaxed">${q}</span>
+              </li>`).join('')}
+          </ol>
+        </div>
+
+      </div>
+    </div>
+  `);
+}
+
+// ===================================================
+//  SCATTER SVG
+// ===================================================
+function buildScatterSVG(resps, careMean, chalMean) {
+  const W = 320, H = 260;
+  const pL = 42, pR = 16, pT = 18, pB = 32;
+  const plotW = W - pL - pR;
+  const plotH = H - pT - pB;
+
+  const toX = care => pL + ((care - 1) / 5) * plotW;
+  const toY = chal => pT + plotH - ((chal - 1) / 5) * plotH;
+  const midX = toX(3.5);
+  const midY = toY(3.5);
+
+  const qCol = {
+    CandidAndCaring: '#7c3aed', CaringButCautious: '#0891b2',
+    DirectButDistant: '#dc2626', DetachedAndDiplomatic: '#78716c'
+  };
+
+  const dots = resps.map((r, i) => {
+    const jx = ((i * 37 + 7) % 11) - 5;
+    const jy = ((i * 53 + 13) % 11) - 5;
+    return {
+      x:   Math.min(W - pR - 6, Math.max(pL + 6, toX(r.care)      + jx)),
+      y:   Math.min(H - pB - 6, Math.max(pT + 6, toY(r.challenge) + jy)),
+      col: qCol[r.style] || '#6b7280'
+    };
+  });
+
+  const svg = `
+    <svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block;width:100%">
+      <rect x="${pL}" y="${pT}"  width="${midX-pL}"       height="${midY-pT}"       fill="#ecfeff" opacity="0.7"/>
+      <rect x="${midX}" y="${pT}" width="${W-pR-midX}"     height="${midY-pT}"       fill="#f5f3ff" opacity="0.7"/>
+      <rect x="${pL}" y="${midY}" width="${midX-pL}"       height="${H-pB-midY}"     fill="#fff1f2" opacity="0.5"/>
+      <rect x="${midX}" y="${midY}" width="${W-pR-midX}"   height="${H-pB-midY}"     fill="#fafaf9" opacity="0.7"/>
+      <rect x="${pL}" y="${pT}" width="${plotW}" height="${plotH}" fill="none" stroke="#e5e7eb" stroke-width="1"/>
+      <line x1="${midX}" y1="${pT}" x2="${midX}" y2="${H-pB}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4,3"/>
+      <line x1="${pL}" y1="${midY}" x2="${W-pR}" y2="${midY}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="${pL+5}" y="${pT+13}" font-size="8" fill="#0891b2" font-weight="700" font-family="system-ui">Caring &amp; Cautious</text>
+      <text x="${midX+5}" y="${pT+13}" font-size="8" fill="#7c3aed" font-weight="700" font-family="system-ui">Candid &amp; Caring</text>
+      <text x="${pL+5}" y="${H-pB-7}" font-size="8" fill="#78716c" font-weight="700" font-family="system-ui">Detached</text>
+      <text x="${midX+5}" y="${H-pB-7}" font-size="8" fill="#dc2626" font-weight="700" font-family="system-ui">Direct &amp; Distant</text>
+      <text x="11" y="${pT+plotH/2}" font-size="8" fill="#9ca3af" text-anchor="middle" font-family="system-ui"
+        transform="rotate(-90,11,${pT+plotH/2})">← Low  ·  Challenge  ·  High →</text>
+      <text x="${pL+plotW/2}" y="${H-6}" font-size="8" fill="#9ca3af" text-anchor="middle" font-family="system-ui">← Low  ·  Care Personally  ·  High →</text>
+      <circle cx="${toX(careMean).toFixed(1)}" cy="${toY(chalMean).toFixed(1)}" r="11"
+        fill="none" stroke="#374151" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.5"/>
+      ${dots.map(d => `<circle cx="${d.x.toFixed(1)}" cy="${d.y.toFixed(1)}" r="5.5" fill="${d.col}" opacity="0.85" stroke="white" stroke-width="1.5"/>`).join('')}
+    </svg>`;
+
+  const legend = `
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:8px">
+      ${Object.entries(qCol).map(([s,c]) => `
+        <span style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:${c}">
+          <svg width="10" height="10"><circle cx="5" cy="5" r="5" fill="${c}"/></svg>${QUADRANTS[s].label}
+        </span>`).join('')}
+    </div>`;
+
+  return svg + legend;
+}
+
+// ===================================================
+//  NARRATIVE GENERATORS
+// ===================================================
+function generateDynamics(counts, n, careMean, chalMean) {
+  const lines = [];
+  const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+  const [majStyle, majCount] = sorted[0];
+  const majPct = Math.round((majCount/n)*100);
+  const q = QUADRANTS[majStyle];
+
+  if (majPct >= 60) {
+    lines.push(`This team has a clear <strong>${q.label}</strong> lean — ${majCount} of ${n} people (${majPct}%) show this as their current tendency. That concentration will shape the feedback culture in visible ways.`);
+  } else {
+    lines.push(`This is a genuinely mixed team across feedback styles. ${sorted.filter(([,v])=>v>0).map(([s,c])=>`${c} ${QUADRANTS[s].label}`).join(', ')}. Mixed profiles can produce rich feedback cultures when the differences are named and worked with — or persistent friction when they're not.`);
+  }
+
+  if (counts.CandidAndCaring > 0 && majStyle === 'CandidAndCaring') {
+    lines.push(`A Candid & Caring majority tends to create high-trust, high-growth environments. The risk is that the standard feels aspirational to some, and those who aren't yet there may feel exposed rather than supported.`);
+  }
+  if (counts.CaringButCautious > counts.DirectButDistant) {
+    lines.push(`The team leans toward care over challenge. Relationships are likely warm and supportive — but honest performance conversations may be consistently underdelivered. Growth can stall not from lack of talent but from lack of honest feedback.`);
+  }
+  if (counts.DirectButDistant > counts.CaringButCautious) {
+    lines.push(`The team leans toward challenge over care. Feedback is probably direct and specific — but the relational container may not be strong enough for it to consistently land as intended. High performers may feel productive but not truly seen.`);
+  }
+  if (counts.DetachedAndDiplomatic > 0) {
+    lines.push(`The presence of Detached & Diplomatic members is worth attending to. This pattern often reflects something about the environment as much as the individual — it's worth exploring what's making full engagement feel costly for those people.`);
+  }
+
+  const teamStyle = classify(careMean, chalMean);
+  const tq = QUADRANTS[teamStyle];
+  lines.push(`The team's centre of gravity sits in the <strong>${tq.label}</strong> quadrant (care: ${careMean.toFixed(1)}, challenge: ${chalMean.toFixed(1)}). ${tq.teamNote}`);
+
+  return lines;
+}
+
+function generateWatchOuts(counts, n) {
+  const w = [];
+  if (counts.CaringButCautious > 0) {
+    w.push("Important feedback being softened to the point of uselessness — people leaving conversations unclear about what actually needs to change.");
+  }
+  if (counts.DirectButDistant > 0) {
+    w.push("Honest feedback landing as attack rather than care — creating defensiveness rather than growth, particularly if the recipient doesn't feel known or valued by the giver.");
+  }
+  if (counts.DetachedAndDiplomatic > 0) {
+    w.push("Team members operating in a kind of managed distance — engaged enough to avoid conflict, not engaged enough to contribute fully. The cost is quiet rather than dramatic.");
+  }
+  if (counts.CandidAndCaring > 1 && counts.DetachedAndDiplomatic > 0) {
+    w.push("A gap between those who give high-quality feedback and those who receive it without reciprocating. The Candid & Caring members may carry a disproportionate share of the team's feedback labour.");
+  }
+  w.push("Feedback only flowing downward. In most teams, the most underused feedback direction is upward — and it's often the most valuable.");
+  return w;
+}
+
+function generateTeamAgreements(counts, n) {
+  const a = [];
+  a.push("We give feedback as close to the moment as possible — not stored up for reviews, and not weaponised in group settings.");
+  if (counts.CaringButCautious > 0) {
+    a.push("We distinguish between kindness and honesty. Protecting someone from a difficult truth is not care — it's self-protection. We commit to saying the useful thing, not just the comfortable one.");
+  }
+  if (counts.DirectButDistant > 0) {
+    a.push("We name the care before we name the challenge. 'I'm raising this because I want you to succeed' is not a nicety — it's what makes honest feedback land as feedback rather than criticism.");
+  }
+  a.push("We make space for feedback to go upward as well as downward. Leaders get feedback too — and model receiving it.");
+  a.push("We separate the message from the delivery. If feedback didn't land well, we say so — and try again rather than giving up on the conversation.");
+  return a;
+}
+
+function generateFacilitationQs(counts) {
+  return [
+    "What's a piece of feedback you've been sitting on? What's stopping you from giving it?",
+    "When did you last receive feedback that genuinely changed how you work? What made it land?",
+    "What does this team's feedback culture feel like — as the people on the receiving end would describe it?",
+    "Where does the balance tip in this team — towards too much care at the expense of honesty, or too much challenge at the expense of relationship?",
+    "What would make it safer to give upward feedback here — to your manager, or to someone more senior?",
+    "Is there anything this team is collectively avoiding saying? What would it take to say it?"
+  ];
+}
+
+// ===================================================
+//  BOOT
+// ===================================================
+function boot() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('admin') === '1') { showAdmin(); return; }
+  homeView();
+}
+
+window.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>
